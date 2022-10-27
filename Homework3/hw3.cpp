@@ -67,66 +67,52 @@ int dfs(ull state, int alpha, int beta, Card cards[2][17], unordered_map<ull, in
     }
     if (memo.find(state) != memo.end()) return memo[state];
 
-    if ((state & (1ull << 24)) == 0) {
-        score = -230;
-        bool play = false;
-        for (int i = 0; i < 17; ++i) {
-            if ((state & (1ull << (58 - i))) != 0 && ((state & (0xF << 18)) == 0 || cmpSuit(state, cards[0][i].suit) || cmpNum(state, cards[0][i].num))) {
-                play = true;
-                ull tmp = state;
-                tmp &= ~(1ull << (58 - i));  // Unset used card.
+    int turn = (state >> 24) & 1;
+    score = turn == 0 ? -230 : 230;
+    unsigned long long idx = 1ull << (turn == 0 ? 58 : 41);
+    bool play = false;
+    for (int i = 0; i < 17; ++i) {
+        if ((state & (idx >> i)) != 0 && ((state & (0xF << 18)) == 0 || cmpSuit(state, cards[turn][i].suit) || cmpNum(state, cards[turn][i].num))) {
+            play = true;
+            ull tmp = state;
+            tmp &= ~(idx >> i);  // Unset used card.
 
-                tmp = setPrevCard(tmp, cards[0][i].suit, cards[0][i].num);
-                tmp = changeTurn(tmp);
+            tmp = setPrevCard(tmp, cards[turn][i].suit, cards[turn][i].num);
+            tmp = changeTurn(tmp);
 
-                // Update alpha in state.
-                tmp &= ~(0x1FFull << 9);
-                tmp |= ((alpha & 0x1FFull) << 9);
-                nscore = dfs(tmp, alpha, beta, cards, memo);
+            // Set alpha & beta in tmp (next state).
+            if (turn == 0) {
+                tmp &= ~(0x1FF << 9);
+                tmp |= (alpha & 0x1FF) << 9;
+            }
+            else {
+                tmp &= ~0x1FF;
+                tmp |= beta & 0x1FF;
+            }
+            nscore = dfs(tmp, alpha, beta, cards, memo);
+            // Update alpha & beta.
+            if (turn == 0) {
                 if (nscore > score) score = nscore;
                 if (score > alpha) alpha = score;
-                if (alpha >= beta) break;
             }
-        }
-
-        if (!play) {
-            ull tmp = state;
-            tmp = setPrevCard(tmp, 0, 0);
-            tmp = changeTurn(tmp);
-            score = dfs(tmp, alpha, beta, cards, memo);
-        }
-        memo[state] = score;
-    }
-    else {
-        score = 230;
-        bool play = false;
-        for (int i = 0; i < 17; ++i) {
-            if ((state & (1ull << (41 - i))) != 0 && ((state & (0xFull << 18)) == 0 || cmpSuit(state, cards[1][i].suit) || cmpNum(state, cards[1][i].num))) {
-                play = true;
-                ull tmp = state;
-                tmp &= ~(1ull << (41 - i));
-
-                tmp = setPrevCard(tmp, cards[1][i].suit, cards[1][i].num);
-                tmp = changeTurn(tmp);
-
-                tmp &= ~(0x1FFull);
-                tmp |= (beta & 0x1FFull);
-                nscore = dfs(tmp, alpha, beta, cards, memo);
+            else {
                 if (nscore < score) score = nscore;
                 if (score < beta) beta = score;
-                if (alpha >= beta) break;
             }
+            // alpha-beta pruning
+            if (alpha >= beta) break;
         }
-
-        if (!play) {
-            ull tmp = state;
-            tmp = setPrevCard(tmp, 0, 0);
-            tmp = changeTurn(tmp);
-            score = dfs(tmp, alpha, beta, cards, memo);
-        }
-        memo[state] = score;
     }
-    return memo[state];
+
+    // The player can't play any card.
+    if (!play) {
+        ull tmp = state;
+        tmp = setPrevCard(tmp, 0, 0);
+        tmp = changeTurn(tmp);
+        score = dfs(tmp, alpha, beta, cards, memo);
+    }
+
+    return memo[state] = score;
 }
 
 int main(void) {
@@ -148,7 +134,7 @@ int main(void) {
             cin >> suit >> num;
             cards[p][i].suit = setSuit(suit);
             cards[p][i].num = setNum(num);
-            state |= (1ull << (((p == 0) ? 58 : 41) - i));
+            state |= (1ull << (((p == 0) ? 58 : 41) - i));  // Set available cards.
         }
     }
     state |= ((-230 & 0x1FF) << 9) | 230;  // Set alpha & beta.
